@@ -31,7 +31,7 @@ h2{margin:0;font-size:16px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{padding:8px 12px;border-radius:999px;background:var(--card);color:var(--text);font-size:14px;border:none;cursor:pointer;text-align:left}
 .chip .m{margin-left:4px}
-.src-est{color:var(--muted)}.src-record{color:var(--ok)}.src-user{color:var(--sub)}
+.src-est{color:var(--muted)}.src-record{color:var(--ok)}.src-user{color:var(--sub)}.src-mine{color:#B7C4FF}
 .legend{display:flex;gap:10px;font-size:11px;color:var(--muted)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:4px}
 .list-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
@@ -75,31 +75,125 @@ label{font-size:13px;color:var(--muted)}
 var KEY = "prioapp.v1";
 
 // ---------- 기본값 사전 ----------
-// [키워드들, 분, 에너지, 주기(일), 첫 동작, 긴 일 여부, 자기 전 필수]
+// [키워드들, 분, 에너지, 주기(일), 첫 동작, 긴 일 여부, 자기 전 필수, 추가정보]
+// 추가정보: src "mine" = 평소 내 생활 기록으로 만든 값, hours = 평소 하는 시간대 [시작시, 끝시), deadline = 기본 마감
+var MINE = {src:"mine"};
+var GEN = {src:"general"};
 var DICT = [
-  [["빨래 개","빨래개","옷 정리","옷정리","옷 개"],15,"low",4,"빨래 한 무더기 침대 위에 올리기",false,false],
+  // ----- 짧은 버전 (긴 일보다 먼저 매칭해야 해서 맨 앞에 둠) -----
+  [["짧은 산책","10분 산책","잠깐 산책","가볍게 걷"],10,"low",1,"현관 나가서 한 블록만 걷기",false,false,GEN],
+  [["홈트 영상","운동 영상","10분 홈트"],10,"high",1,"매트 펴고 10분짜리 영상 틀기",false,false,GEN],
+  [["걷기 달리기","걷기·달리기","걷뛰","인터벌","교대","couch to 5k"],30,"high",3,"러닝화 신고 준비 걷기 5분부터",false,false,{src:"general", hours:[21,23]}],
+  [["아이디어 메모","아이디어","프리라이팅","브레인스토밍","구상 메모"],10,"low",null,"주제 한 줄 쓰고 떠오르는 대로 적기",false,false,GEN],
+  [["예습"],10,"low",null,"목차와 예제 훑고 질문 하나 적기",false,false,GEN],
+  [["코딩 문제","코딩","알고리즘","구현"],25,"high",null,"함수 하나 골라서 이름부터 쓰기",true,false,GEN],
+  [["일정 짜","다음 주 일정","다음주 일정","주간 일정"],20,"low",7,"달력에 고정 일정부터 넣기",false,false,GEN],
+  // ----- 내 생활 패턴 기반 (위에 있을수록 먼저 매칭) -----
+  // 영어·독서·산책
+  [["듀오링고"],10,"low",1,"듀오링고 열기",false,false,{src:"mine", hours:[7,9]}],
+  [["영어앱","영어 앱","스피킹","리스닝","영어회화","영어 회화"],40,"low",1,"영어앱 열고 오늘 레슨 누르기",false,false,{src:"mine", hours:[19,23]}],
+  [["점심 산책","산책"],50,"low",1,"신발 신고 밖으로 나가기",false,false,{src:"mine", only:[[12,13]]}],
+  [["걷기"],30,"low",2,"신발 신고 밖으로 나가기",false,false,MINE],
+  [["출퇴근 독서"],20,"low",1,"책 펴기",false,false,{src:"mine", only:[[8,9],[18,19]]}],
+  [["독서","책 읽","책읽"],20,"low",1,"책 펴기",false,false,MINE],
+  // 자격증·대학원
+  [["물류관리사","화물운송","국제물류","물류관련법규","물류법규"],60,"high",3,"강의 앱 열고 다음 강의 재생",true,false,{src:"mine", hours:[19,21], deadline:"2026-12-10"}],
+  [["수학"],20,"high",3,"문제집 펴고 한 문제 풀기",false,false,{src:"mine", hours:[19,22]}],
+  // 코디세이
+  [["시험 공부","시험공부","시험"],40,"high",null,"틀린 문제 노트 펴기",false,false,MINE],
+  [["코디세이 과제","코디세이 미션","과제","미션"],45,"high",null,"과제 페이지 열고 요구사항 읽기",true,false,MINE],
+  [["파이썬","python"],30,"high",null,"에디터 열고 예제 파일 실행하기",false,false,MINE],
+  [["git","깃 연습","깃연습"],15,"low",null,"터미널 열고 git status 입력하기",false,false,MINE],
+  [["npu"],25,"high",null,"테스트 코드 열고 한 번 돌려보기",false,false,MINE],
+  [["코디세이"],120,"high",1,"코디세이 갈 준비하기",false,false,MINE],
+  // 창작
+  [["앤솔러지","앤솔"],30,"high",null,"원고 파일 열고 마지막 문단 다시 읽기",true,false,{src:"mine", deadline:"2026-12-31"}],
+  [["소설","원고","연성","팬픽","이차창작","2차창작","글쓰기","글 쓰"],30,"high",null,"원고 파일 열고 마지막 문단 다시 읽기",true,false,MINE],
+  // 운동
+  [["런데이","러닝","달리기","조깅","뛰기"],40,"high",3,"러닝화 신고 런데이 켜기",false,false,{src:"mine", hours:[21,23]}],
+  [["자전거","라이딩"],50,"high",7,"헬멧 꺼내고 워치 켜기",false,false,MINE],
+  // 집안일·생활
+  [["설거지"],15,"low",1,"고무장갑 끼기",false,false,MINE],
+  [["널어놓은 옷","널어 놓은 옷","옷 정리","옷정리","옷 걷","빨래 걷"],10,"low",4,"건조대 앞에서 한 벌 걷기",false,false,MINE],
+  [["빨래 개","빨래개","옷 개"],15,"low",4,"빨래 한 무더기 침대 위에 올리기",false,false,MINE],
+  [["택배"],10,"low",7,"상자 하나 접기",false,false,MINE],
+  [["샤워","씻기","목욕"],15,"low",1,"욕실 불 켜고 물 틀기",false,true,MINE],
+  [["출근 준비","출근준비","내일 준비"],10,"low",1,"내일 입을 옷 꺼내두기",false,true,MINE],
+  [["일기"],5,"low",1,"오늘 한 줄 쓰기",false,false,MINE],
+  [["영양제"],2,"low",1,"영양제 통 꺼내기",false,false,MINE],
+  [["저녁"],15,"low",1,"냄비나 그릇 꺼내기",false,false,MINE],
+  [["대전","짐 싸","짐싸"],20,"low",7,"가방 펼치기",false,false,MINE],
+  // ----- 다른 사람들 평균 (조사·실측 자료 기반, 1인 가구 기준으로 조정) -----
+  [["화장실 청소","욕실 청소","화장실청소","욕실청소"],25,"high",7,"고무장갑 끼고 세제 뿌리기",false,false,GEN],
+  [["세면대","거울 닦"],5,"low",3,"휴지나 걸레 한 장 집기",false,false,GEN],
+  [["청소기","청소기 돌리기"],30,"high",7,"청소기 꺼내서 전원 켜기",false,false,GEN],
+  [["걸레질","물걸레","바닥 닦"],15,"high",7,"물걸레 적시기",false,false,GEN],
+  [["먼지 털","먼지털","먼지 닦"],15,"low",7,"먼지떨이 꺼내기",false,false,GEN],
+  [["창문","방충망"],30,"high",30,"창문 하나만 열고 닦기",false,false,GEN],
+  [["이불 빨래","침구","시트 교체","이불빨래"],15,"low",10,"이불 커버 벗기기",false,false,GEN],
+  [["빨래 널","빨래널"],10,"low",4,"세탁기 문 열기",false,false,GEN],
+  [["세탁기 돌리","빨래 돌리","세탁기","빨래하기"],5,"low",4,"빨래 바구니 들고 세탁기 앞으로 가기",false,false,GEN],
+  [["건조기"],3,"low",4,"세탁기에서 건조기로 옮기기",false,false,GEN],
+  [["다림질","다리미"],15,"low",7,"다리미 코드 꽂기",false,false,GEN],
+  [["수건 교체","수건 갈"],2,"low",7,"새 수건 하나 꺼내기",false,false,GEN],
+  [["식기세척기","식세기"],5,"low",1,"식기세척기 문 열기",false,false,GEN],
+  [["싱크대","주방 정리","주방정리","조리대"],5,"low",1,"행주 집기",false,false,GEN],
+  [["냉장고"],15,"low",7,"냉장고 한 칸만 비우기",false,false,GEN],
+  [["장 본","장본 거"],10,"low",7,"장바구니 식탁에 올리기",false,false,GEN],
+  [["장보기","장 보","마트"],45,"high",7,"살 것 3개 적기",false,false,GEN],
+  [["반품"],10,"low",null,"반품 신청 화면 열기",false,false,GEN],
+  [["분리수거","쓰레기"],10,"low",3,"봉투 묶기",false,false,GEN],
+  [["침대 정리","이불 개","이불개"],2,"low",1,"이불 한 번 털기",false,false,{src:"general", hours:[7,9]}],
+  [["환기"],5,"low",1,"창문 두 곳 열기",false,false,GEN],
+  [["현관","신발 정리","신발정리"],5,"low",7,"신발 한 켤레 제자리에 두기",false,false,GEN],
+  [["화분","물 주","식물"],5,"low",7,"물뿌리개 채우기",false,false,GEN],
+  [["손톱"],10,"low",7,"손톱깎이 꺼내기",false,false,GEN],
+  [["요리","밥 하","밥하","식사 준비"],30,"low",1,"냉장고 열어 재료 꺼내기",false,false,GEN],
+  // ----- 일반 루틴 (조사·권장 자료 기반) -----
+  // 몸 관리
+  [["양치","치실"],5,"low",1,"칫솔에 치약 짜기",false,true,GEN],
+  [["스킨케어","세안","세수","기초화장"],10,"low",1,"세안제 짜기",false,true,GEN],
+  [["머리 감","머리감","드라이","머리 말리"],15,"low",1,"샴푸 꺼내기",false,false,GEN],
+  [["화장","메이크업"],15,"low",1,"파우치 열기",false,false,{src:"general", hours:[7,9]}],
+  [["면도"],5,"low",1,"면도기 꺼내기",false,false,GEN],
+  [["외출 준비","아침 준비","나갈 준비"],30,"low",1,"입을 옷부터 꺼내기",false,false,{src:"general", hours:[7,9]}],
+  [["옷 고르","옷 갈아","옷갈아"],5,"low",1,"옷장 문 열기",false,false,GEN],
+  [["낮잠"],20,"low",null,"알람 20분 맞추기",false,false,GEN],
+  // 마음·계획
+  [["명상","호흡"],10,"low",1,"앉아서 눈 감고 숨 세 번 쉬기",false,false,GEN],
+  [["주간 계획","주간 회고","주간계획","한 주 정리","한주 정리"],20,"low",7,"이번 주 달력 열기",false,false,GEN],
+  [["하루 계획","오늘 계획","계획 세우"],10,"low",1,"오늘 할 일 3개 적기",false,false,{src:"general", hours:[7,10]}],
+  [["뉴스"],15,"low",1,"뉴스 앱 열기",false,false,GEN],
+  // 운동
+  [["헬스","근력","웨이트","pt 받","피티"],50,"high",2,"운동복 갈아입고 물통 챙기기",false,false,GEN],
+  [["홈트","홈 트레이닝","플랭크","스쿼트"],20,"high",1,"매트 펴고 운동 영상 틀기",false,false,GEN],
+  [["요가","필라테스"],50,"high",3,"매트 챙기기",false,false,GEN],
+  [["수영"],50,"high",3,"수영 가방 챙기기",false,false,GEN],
+  [["폼롤러","스트레칭"],15,"low",1,"매트 펴기",false,false,GEN],
+  // 공부·자기계발
+  [["단어 암기","단어외우","단어 외우","단어장"],15,"low",1,"단어장 펴기",false,false,GEN],
+  [["복습"],20,"high",1,"오늘 배운 거 노트 펴기",false,false,GEN],
+  [["블로그"],40,"high",7,"글 제목부터 적기",false,false,GEN],
+  // 생활 행정·연락
+  [["공과금","고지서","관리비"],10,"low",30,"은행 앱 열기",false,false,GEN],
+  [["은행"],15,"low",null,"은행 앱 열기",false,false,GEN],
+  [["예약"],5,"low",null,"예약 앱이나 전화번호 찾기",false,false,GEN],
+  [["메일","이메일","답장","메시지 정리","카톡 정리"],15,"low",1,"안 읽은 것 하나 열기",false,false,GEN],
+  [["안부 전화","부모님 전화","부모님께 전화","엄마한테 전화","아빠한테 전화","전화하기"],15,"low",7,"연락처 열기",false,false,GEN],
+  [["사진 정리","사진정리"],20,"low",30,"갤러리에서 이번 달 사진 열기",false,false,GEN],
+  [["폰 정리","파일 정리","폴더 정리","앱 정리"],20,"low",30,"다운로드 폴더 열기",false,false,GEN],
+  // ----- 일반 기본값 -----
   [["빨래"],10,"low",4,"세탁기에 빨래 넣기",false,false],
-  [["샤워","씻기","목욕"],15,"low",1,"욕실 불 켜고 물 틀기",false,true],
-  [["설거지"],15,"low",1,"고무장갑 끼기",false,false],
   [["청소기","청소"],30,"high",7,"청소기 꺼내서 콘센트 꽂기",false,false],
-  [["택배"],10,"low",7,"상자 하나 접기",false,false],
   [["쓰레기","분리수거"],10,"low",3,"봉투 묶기",false,false],
-  [["출근 준비","출근준비","내일 준비"],10,"low",1,"내일 입을 옷 꺼내두기",false,true],
-  [["스트레칭","요가"],10,"low",1,"매트 펴기",false,false],
-  [["러닝","달리기","조깅"],40,"high",2,"러닝화 신기",false,false],
-  [["자전거","라이딩"],45,"high",3,"헬멧 꺼내기",false,false],
-  [["운동","헬스","홈트"],40,"high",2,"운동복 갈아입기",false,false],
-  [["인강","강의"],60,"high",2,"강의 앱 열고 재생 누르기",true,false],
-  [["과제","레포트","보고서"],60,"high",null,"파일 열고 제목 적기",true,false],
-  [["시험"],60,"high",null,"틀린 문제 노트 펴기",false,false],
+  [["운동"],40,"high",2,"운동복 갈아입기",false,false],
+  [["인강","강의"],60,"high",3,"강의 앱 열고 재생 누르기",true,false],
+  [["레포트","보고서"],60,"high",null,"파일 열고 제목 적기",true,false],
   [["공부"],60,"high",1,"책 펴고 첫 페이지 읽기",false,false],
-  [["일기"],5,"low",1,"오늘 한 줄 쓰기",false,false],
   [["가계부"],5,"low",1,"오늘 쓴 돈 하나 입력",false,false],
   [["영어","단어"],15,"low",1,"영어앱 열기",false,false],
-  [["독서","책 읽"],30,"low",1,"책 펴기",false,false],
   [["요리","밥 하","밥하"],30,"low",1,"냉장고 열어 재료 꺼내기",false,false],
   [["장보기","장 보"],40,"high",7,"살 것 3개 적기",false,false],
-  [["원고","소설","글쓰기","글 쓰"],60,"high",null,"문서 열고 한 문장 쓰기",true,false],
   [["정리"],20,"low",7,"버릴 것 하나 집기",false,false]
 ];
 
@@ -171,13 +265,14 @@ function fmtDeadline(k){ var d = keyToDate(k); return (d.getMonth()+1)+"/"+d.get
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function find(id){ for(var i=0;i<S.tasks.length;i++) if(S.tasks[i].id===id) return S.tasks[i]; return null; }
-function srcClass(t){ return t.minutesSource==="record" ? "src-record" : t.minutesSource==="user" ? "src-user" : "src-est"; }
-function srcLabel(t){ return {record:"내 기록 평균", user:"직접 입력", ai:"AI 추정", dict:"기본값 추정", default:"임시값", pending:"추정 중"}[t.minutesSource] || "추정"; }
+function srcClass(t){ return t.minutesSource==="record" ? "src-record" : t.minutesSource==="user" ? "src-user" : t.minutesSource==="mine" ? "src-mine" : "src-est"; }
+function srcLabel(t){ return {record:"내 기록 평균", mine:"평소 패턴", general:"일반 평균", user:"직접 입력", ai:"AI 추정", dict:"기본값 추정", default:"임시값", pending:"추정 중"}[t.minutesSource] || "추정"; }
 function fmtMin(m){ return m>=60 ? (Math.floor(m/60)+"시간"+(m%60? " "+(m%60)+"분":"")) : m+"분"; }
 
 // ---------- 추정 ----------
 function dictMatch(name){
-  for(var i=0;i<DICT.length;i++){ var e = DICT[i]; for(var j=0;j<e[0].length;j++){ if(name.indexOf(e[0][j])>=0) return e; } }
+  var n = name.toLowerCase();
+  for(var i=0;i<DICT.length;i++){ var e = DICT[i]; for(var j=0;j<e[0].length;j++){ if(n.indexOf(e[0][j].toLowerCase())>=0) return e; } }
   return null;
 }
 function aiEstimate(name){
@@ -201,12 +296,16 @@ function applyEstimate(t, e, source){
   t.longTerm = !!e.longTerm;
   t.firstStep = e.firstStep || t.firstStep || "";
   t.beforeBed = !!e.beforeBed;
-  if(t.longTerm && !t.deadline && !t.noDeadline) t.needsDeadline = true;
+  t.hours = e.hours || t.hours || null;
+  t.only = e.only || t.only || null;
+  if(e.deadline && !t.deadline && e.deadline >= today()) t.deadline = e.deadline;
+  t.needsDeadline = !!(t.longTerm && !t.deadline && !t.noDeadline);
 }
 function estimate(t){
   var d = dictMatch(t.name);
   if(d){
-    applyEstimate(t, {minutes:d[1], energy:d[2], freqDays:d[3], firstStep:d[4], longTerm:d[5], beforeBed:d[6]}, "dict");
+    var ex = d[7] || {};
+    applyEstimate(t, {minutes:d[1], energy:d[2], freqDays:d[3], firstStep:d[4], longTerm:d[5], beforeBed:d[6], hours:ex.hours, only:ex.only, deadline:ex.deadline}, ex.src === "mine" ? "mine" : ex.src === "general" ? "general" : "dict");
     save(); render(); return;
   }
   if(S.settings.apiKey){
@@ -266,16 +365,27 @@ function score(t){
   }
   // 시간대
   var h = new Date().getHours(), late = h >= 22 || h < 5, fit = 0.5;
-  if(late){
+  var inHours = t.hours && h >= t.hours[0] && h < t.hours[1];
+  if(inHours){
+    // 평소 이 시간에 하던 일이면 밤이어도 감점하지 않음
+    s += 1; fit = 1; reasons.push("평소 이 시간에 하던 일");
+    if(t.beforeBed && late){ s += 2; reasons.push("자기 전에 꼭 해야 해요"); }
+  } else if(late){
     if(t.beforeBed){ s += 2; fit = 1; reasons.push("자기 전에 꼭 해야 해요"); }
     if(t.energy === "high"){ s -= 1.5; fit = 0.1; reasons.push("밤엔 에너지 높은 일은 감점"); }
     else { s += 0.5; fit = Math.max(fit, 0.8); }
     if(t.minutes > 30){ s -= 1; fit = Math.min(fit, 0.3); }
   } else if(h < 12 && t.energy === "high"){ s += 0.7; fit = 0.9; reasons.push("오전은 집중하기 좋은 시간"); }
   else if(h >= 18 && t.energy === "low"){ s += 0.3; fit = 0.7; }
+  var block = null;
+  if(t.only){
+    var ok = t.only.some(function(w){ return h >= w[0] && h < w[1]; });
+    if(ok){ s += 1.5; fit = 1; reasons.push("지금이 이 일을 하는 시간"); }
+    else { s -= 5; fit = 0.05; block = t.only.map(function(w){ return w[0] + "~" + w[1] + "시"; }).join(", ") + "에 하는 일"; }
+  }
   parts.fit = fit;
   if(pinned(t)) reasons.unshift("오늘 꼭 할 일");
-  return {s:s, reasons:reasons, parts:parts};
+  return {s:s, reasons:reasons, parts:parts, block:block};
 }
 function makePlan(){
   var tk = today(), avail = minutesToBed(), used = 0, list = [];
@@ -289,7 +399,7 @@ function makePlan(){
     x.slot = full > left && canSplit(x.t) && left >= 5 ? Math.floor(left) : full;
     if((pinned(x.t) || x.sc.s > 0.8 || (S.windowEnd && canSplit(x.t))) && x.slot <= left){ now.push(x); used += x.slot; }
     else {
-      var why = avail === 0 ? "사용 가능한 시간이 끝났어요" : x.sc.s <= 0.8 ? (x.t.energy === "high" && (new Date().getHours() >= 22 || new Date().getHours() < 5) ? "에너지 높은 일 → 여유 있는 낮 시간에" : "급하지 않아요") : "오늘 남은 시간이 부족해요";
+      var why = x.sc.block ? x.sc.block : avail === 0 ? "사용 가능한 시간이 끝났어요" : x.sc.s <= 0.8 ? (x.t.energy === "high" && (new Date().getHours() >= 22 || new Date().getHours() < 5) ? "에너지 높은 일 → 여유 있는 낮 시간에" : "급하지 않아요") : "오늘 남은 시간이 부족해요";
       later.push({t:x.t, sc:x.sc, why:why});
     }
   });
@@ -318,7 +428,7 @@ function viewDump(){
       '<input type="date" id="dlinput" class="input" style="display:none" aria-label="마감 날짜" data-id="'+need.id+'"></div>';
   }
   h += '<div class="field"><div class="between"><div class="small">적은 것 ' + items.length + '개</div>' +
-    '<div class="legend"><span><span class="dot" style="background:#6B7280"></span>추정</span><span><span class="dot" style="background:var(--ok)"></span>내 기록</span></div></div>';
+    '<div class="legend"><span><span class="dot" style="background:#6B7280"></span>추정</span><span><span class="dot" style="background:#B7C4FF"></span>평소 패턴</span><span><span class="dot" style="background:var(--ok)"></span>내 기록</span></div></div>';
   if(!items.length) h += '<div class="empty">아직 아무것도 없어요.<br>설거지, 샤워, 공부처럼 떠오르는 대로 적어보세요.</div>';
   else {
     h += '<div class="chips">';
