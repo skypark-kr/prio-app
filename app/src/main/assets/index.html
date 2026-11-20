@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121417">
+<title>지금 뭐부터</title>
+<style>
+:root{--bg:#121417;--card:#1C1F24;--card2:#262A31;--line:#2E333B;--text:#E8EAED;--sub:#C9CDD3;--muted:#9AA0A8;--accent:#8EA2FF;--warn:#F0A35E;--ok:#7FD1AE}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Noto Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+body{min-height:100vh}
+button,input,select{font-family:inherit;font-size:15px}
+a{color:var(--accent)}
+.wrap{max-width:480px;margin:0 auto;padding:24px 20px 110px;display:flex;flex-direction:column;gap:18px}
+.sub{font-size:13px;color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
+h1{margin:0;font-size:24px;line-height:1.35}
+h2{margin:0;font-size:16px}
+.card{background:var(--card);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:8px;align-items:center}
+.between{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.input{flex:1;min-width:0;height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:0 14px}
+.btn{height:48px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);padding:0 14px;cursor:pointer}
+.btn.primary{background:var(--accent);border:none;color:#121417;font-weight:700}
+.btn.warn{background:var(--warn);border:none;color:#121417;font-weight:700}
+.btn.big{height:60px;font-size:18px;border-radius:16px;width:100%}
+.btn.icon{width:48px;padding:0;display:flex;align-items:center;justify-content:center}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:999px;background:var(--card);color:var(--text);font-size:14px;border:none;cursor:pointer;text-align:left}
+.chip .m{margin-left:4px}
+.src-est{color:var(--muted)}.src-record{color:var(--ok)}.src-user{color:var(--sub)}
+.legend{display:flex;gap:10px;font-size:11px;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:4px;margin-right:4px}
+.list-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.list-item:last-child{border-bottom:none}
+.list-item button{background:none;border:none;color:var(--text);font-size:15px;padding:0;text-align:left;cursor:pointer}
+.reason{font-size:12px;color:var(--muted);margin-top:2px}
+.bar{height:8px;background:var(--line);border-radius:4px;flex:1}
+.bar>div{height:8px;border-radius:4px;background:var(--accent)}
+nav{position:fixed;left:0;right:0;bottom:0;background:#16191D;border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+nav .in{max-width:480px;width:100%;display:grid;grid-template-columns:repeat(4,1fr)}
+nav a{height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);text-decoration:none;font-size:12px}
+nav a.on{color:var(--accent)}
+.timer{font-size:64px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.empty{padding:28px 16px;text-align:center;color:var(--sub);line-height:1.7}
+.toggle{width:44px;height:26px;accent-color:var(--ok)}
+.chart{height:120px;display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--line);position:relative}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--sub)}
+.chart .col div{width:100%;background:var(--ok);border-radius:6px 6px 0 0}
+.tag{padding:3px 8px;border-radius:6px;background:var(--card2);color:var(--sub);font-size:11px}
+.danger{color:#FF8A80}
+label{font-size:13px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer}
+.seg button.on{background:var(--accent);color:#121417;border:none;font-weight:700}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav aria-label="메뉴"><div class="in">
+  <a href="#dump" data-nav="dump"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>쏟아내기</a>
+  <a href="#now" data-nav="now"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>지금</a>
+  <a href="#plan" data-nav="plan"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>계획</a>
+  <a href="#settings" data-nav="settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>설정</a>
+</div></nav>
+<script>
+(function(){
+"use strict";
+var KEY = "prioapp.v1";
+
+// ---------- 기본값 사전 ----------
+// [키워드들, 분, 에너지, 주기(일), 첫 동작, 긴 일 여부, 자기 전 필수]
+var DICT = [
+  [["빨래 개","빨래개","옷 정리","옷정리","옷 개"],15,"low",4,"빨래 한 무더기 침대 위에 올리기",false,false],
+  [["빨래"],10,"low",4,"세탁기에 빨래 넣기",false,false],
+  [["샤워","씻기","목욕"],15,"low",1,"욕실 불 켜고 물 틀기",false,true],
+  [["설거지"],15,"low",1,"고무장갑 끼기",false,false],
+  [["청소기","청소"],30,"high",7,"청소기 꺼내서 콘센트 꽂기",false,false],
+  [["택배"],10,"low",7,"상자 하나 접기",false,false],
+  [["쓰레기","분리수거"],10,"low",3,"봉투 묶기",false,false],
+  [["출근 준비","출근준비","내일 준비"],10,"low",1,"내일 입을 옷 꺼내두기",false,true],
+  [["스트레칭","요가"],10,"low",1,"매트 펴기",false,false],
+  [["러닝","달리기","조깅"],40,"high",2,"러닝화 신기",false,false],
+  [["자전거","라이딩"],45,"high",3,"헬멧 꺼내기",false,false],
+  [["운동","헬스","홈트"],40,"high",2,"운동복 갈아입기",false,false],
+  [["인강","강의"],60,"high",2,"강의 앱 열고 재생 누르기",true,false],
+  [["과제","레포트","보고서"],60,"high",null,"파일 열고 제목 적기",true,false],
+  [["시험"],60,"high",null,"틀린 문제 노트 펴기",false,false],
+  [["공부"],60,"high",1,"책 펴고 첫 페이지 읽기",false,false],
+  [["일기"],5,"low",1,"오늘 한 줄 쓰기",false,false],
+  [["가계부"],5,"low",1,"오늘 쓴 돈 하나 입력",false,false],
+  [["영어","단어"],15,"low",1,"영어앱 열기",false,false],
+  [["독서","책 읽"],30,"low",1,"책 펴기",false,false],
+  [["요리","밥 하","밥하"],30,"low",1,"냉장고 열어 재료 꺼내기",false,false],
+  [["장보기","장 보"],40,"high",7,"살 것 3개 적기",false,false],
+  [["원고","소설","글쓰기","글 쓰"],60,"high",null,"문서 열고 한 문장 쓰기",true,false],
+  [["정리"],20,"low",7,"버릴 것 하나 집기",false,false]
+];
+
+// ---------- 저장 ----------
+function defaultState(){ return {tasks:[], settings:{bedtime:"00:30", apiKey:"", model:"claude-haiku-5-5"}, timer:null}; }
+var S;
+try { S = JSON.parse(localStorage.getItem(KEY)) || defaultState(); } catch(e){ S = defaultState(); }
+if(!S.settings) S.settings = defaultState().settings;
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+
+// ---------- 날짜 ----------
+function pad(n){ return (n<10?"0":"")+n; }
+// 하루는 새벽 5시에 바뀌는 것으로 계산
+function dayKey(d){ var x = new Date(d.getTime() - 5*3600000); return x.getFullYear()+"-"+pad(x.getMonth()+1)+"-"+pad(x.getDate()); }
+function keyToDate(k){ var p = k.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+function daysBetween(a,b){ return Math.round((keyToDate(b) - keyToDate(a))/86400000); }
+function addDays(k,n){ var d = keyToDate(k); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function today(){ return dayKey(new Date()); }
+function minutesToBed(){
+  var now = new Date(), p = (S.settings.bedtime||"00:30").split(":");
+  var c = new Date(now); c.setHours(+p[0], +p[1], 0, 0);
+  if(c <= now) c.setDate(c.getDate()+1);
+  var m = Math.round((c - now)/60000);
+  return m > 18*60 ? 0 : m; // 취침 시간 지남
+}
+function fmtDeadline(k){ var d = keyToDate(k); return (d.getMonth()+1)+"/"+d.getDate(); }
+
+// ---------- 유틸 ----------
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function find(id){ for(var i=0;i<S.tasks.length;i++) if(S.tasks[i].id===id) return S.tasks[i]; return null; }
+function srcClass(t){ return t.minutesSource==="record" ? "src-record" : t.minutesSource==="user" ? "src-user" : "src-est"; }
+function srcLabel(t){ return {record:"내 기록 평균", user:"직접 입력", ai:"AI 추정", dict:"기본값 추정", default:"임시값", pending:"추정 중"}[t.minutesSource] || "추정"; }
+function fmtMin(m){ return m>=60 ? (Math.floor(m/60)+"시간"+(m%60? " "+(m%60)+"분":"")) : m+"분"; }
+
+// ---------- 추정 ----------
+function dictMatch(name){
+  for(var i=0;i<DICT.length;i++){ var e = DICT[i]; for(var j=0;j<e[0].length;j++){ if(name.indexOf(e[0][j])>=0) return e; } }
+  return null;
+}
+function aiEstimate(name){
+  var prompt = "할 일: \"" + name + "\"\n이 할 일을 한 번 할 때 걸리는 시간 등을 추정해 JSON만 답해. 형식: " +
+    "{\"minutes\":정수,\"energy\":\"low\" 또는 \"high\",\"freqDays\":반복 주기 일수 정수 또는 null(한 번만 하는 일),\"longTerm\":여러 번에 나눠 하는 긴 일이면 true,\"firstStep\":\"2분 안에 할 수 있는 첫 동작\",\"beforeBed\":자기 전에 꼭 해야 하는 일이면 true}";
+  return fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{"content-type":"application/json","x-api-key":S.settings.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body: JSON.stringify({model:S.settings.model||"claude-haiku-5-5", max_tokens:300, messages:[{role:"user", content:prompt}]})
+  }).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(j){
+      var txt = (j.content||[]).map(function(c){return c.text||"";}).join("");
+      var m = txt.match(/\{[\s\S]*\}/); if(!m) throw new Error("no json");
+      return JSON.parse(m[0]);
+    });
+}
+function applyEstimate(t, e, source){
+  if(t.minutesSource==="pending"){ t.minutes = Math.max(1, Math.round(+e.minutes||15)); t.minutesSource = source; }
+  t.energy = e.energy==="high" ? "high" : "low";
+  if(t.freqSource!=="record" && t.freqSource!=="user") { t.freqDays = e.freqDays ? Math.max(1, Math.round(+e.freqDays)) : null; t.freqSource = "est"; }
+  t.longTerm = !!e.longTerm;
+  t.firstStep = e.firstStep || t.firstStep || "";
+  t.beforeBed = !!e.beforeBed;
+  if(t.longTerm && !t.deadline && !t.noDeadline) t.needsDeadline = true;
+}
+function estimate(t){
+  var d = dictMatch(t.name);
+  if(d){
+    applyEstimate(t, {minutes:d[1], energy:d[2], freqDays:d[3], firstStep:d[4], longTerm:d[5], beforeBed:d[6]}, "dict");
+    save(); render(); return;
+  }
+  if(S.settings.apiKey){
+    aiEstimate(t.name).then(function(e){ applyEstimate(t, e, "ai"); save(); render(); })
+      .catch(function(){ applyEstimate(t, {minutes:15, energy:"low", freqDays:null}, "default"); t.aiError = true; save(); render(); });
+  } else {
+    applyEstimate(t, {minutes:15, energy:"low", freqDays:null}, "default"); save(); render();
+  }
+}
+
+// ---------- 학습 ----------
+function learn(t){
+  if(t.autoLearn !== false && t.records && t.records.length >= 3){
+    var r = t.records.slice(-6), sum = 0;
+    r.forEach(function(x){ sum += x.minutes; });
+    t.minutes = Math.max(1, Math.round(sum / r.length));
+    t.minutesSource = "record";
+  }
+  if(t.completions && t.completions.length >= 3 && t.freqSource !== "user"){
+    var c = t.completions.slice(-8).slice().sort(), gaps = [];
+    for(var i=1;i<c.length;i++) gaps.push(daysBetween(c[i-1], c[i]));
+    gaps = gaps.filter(function(g){return g>0;}).sort(function(a,b){return a-b;});
+    if(gaps.length){ t.freqDays = gaps[Math.floor(gaps.length/2)]; t.freqSource = "record"; }
+  }
+}
+
+// ---------- 점수 ----------
+function isActive(t, tk){
+  if(t.archived) return false;
+  if(t.postponedUntil && tk < t.postponedUntil) return false;
+  if(t.completions && t.completions.indexOf(tk) >= 0) return false;
+  return true;
+}
+function score(t){
+  var tk = today(), s = 0, reasons = [], parts = {overdue:0, deadline:0, fit:0};
+  // 밀린 정도
+  if(t.freqDays){
+    var ds = t.lastDone ? daysBetween(t.lastDone, tk) : t.freqDays;
+    var r = Math.min(ds / t.freqDays, 3);
+    parts.overdue = r; s += r * 1.5;
+    if(!t.lastDone) reasons.push("아직 기록이 없어요");
+    else if(r >= 1) reasons.push("마지막으로 한 지 " + ds + "일");
+    else reasons.push("최근에 했어요");
+  } else { parts.overdue = 0.7; s += 1; }
+  // 마감
+  if(t.deadline){
+    var dl = daysBetween(tk, t.deadline);
+    if(dl <= 1){ s += 4; parts.deadline = 1; reasons.push(dl < 0 ? "마감이 지났어요" : "마감이 코앞"); }
+    else if(dl <= 7){ s += 2.5; parts.deadline = 0.7; reasons.push("마감까지 " + dl + "일"); }
+    else if(dl <= 30){ s += 1; parts.deadline = 0.35; reasons.push("마감까지 " + dl + "일"); }
+  }
+  // 시간대
+  var h = new Date().getHours(), late = h >= 22 || h < 5, fit = 0.5;
+  if(late){
+    if(t.beforeBed){ s += 2; fit = 1; reasons.push("자기 전에 꼭 해야 해요"); }
+    if(t.energy === "high"){ s -= 1.5; fit = 0.1; reasons.push("밤엔 에너지 높은 일은 감점"); }
+    else { s += 0.5; fit = Math.max(fit, 0.8); }
+    if(t.minutes > 30){ s -= 1; fit = Math.min(fit, 0.3); }
+  } else if(h < 12 && t.energy === "high"){ s += 0.7; fit = 0.9; reasons.push("오전은 집중하기 좋은 시간"); }
+  else if(h >= 18 && t.energy === "low"){ s += 0.3; fit = 0.7; }
+  parts.fit = fit;
+  if(t.snoozed === tk){ s -= 0.8; }
+  return {s:s, reasons:reasons, parts:parts};
+}
+function makePlan(){
+  var tk = today(), avail = minutesToBed(), used = 0, list = [];
+  S.tasks.forEach(function(t){ if(isActive(t, tk) && t.minutesSource !== "pending"){ var sc = score(t); list.push({t:t, sc:sc}); } });
+  list.sort(function(a,b){ return b.sc.s - a.sc.s; });
+  var now = [], later = [];
+  list.forEach(function(x){
+    if(x.sc.s > 0.8 && used + x.t.minutes <= avail){ now.push(x); used += x.t.minutes; }
+    else {
+      var why = avail === 0 ? "취침 시간이 지났어요" : x.sc.s <= 0.8 ? (x.t.energy === "high" && (new Date().getHours() >= 22 || new Date().getHours() < 5) ? "에너지 높은 일 → 여유 있는 낮 시간에" : "급하지 않아요") : "오늘 남은 시간이 부족해요";
+      later.push({t:x.t, sc:x.sc, why:why});
+    }
+  });
+  var done = S.tasks.filter(function(t){ return t.completions && t.completions.indexOf(tk) >= 0; });
+  return {now:now, later:later, used:used, avail:avail, done:done};
+}
+
+// ---------- 화면 ----------
+var app = document.getElementById("app");
+function route(){ var h = location.hash.replace("#","") || "dump"; var p = h.split("/"); return {name:p[0], id:p[1]}; }
+
+function viewDump(){
+  var need = S.tasks.filter(function(t){ return !t.archived && t.needsDeadline; })[0];
+  var items = S.tasks.filter(function(t){ return !t.archived; });
+  var h = '<div class="wrap">' +
+    '<div><div class="sub">취침 목표 ' + esc(S.settings.bedtime) + ' · 남은 시간 ' + fmtMin(minutesToBed()) + '</div>' +
+    '<h1>머릿속에 있는 거,<br>이름만 적어요</h1></div>' +
+    '<form class="field" data-form="add"><label for="newtask">할 일 추가 · 시간은 앱이 알아서 채워요</label>' +
+    '<div class="row"><input id="newtask" class="input" placeholder="예: 택배상자 정리" autocomplete="off">' +
+    '<button class="btn primary icon" aria-label="추가"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div></form>';
+  if(need){
+    h += '<div class="card" style="border:1px solid var(--warn)"><div class="between"><h2>' + esc(need.name) + '</h2><span class="tag">' + srcLabel(need) + ' · ' + fmtMin(need.minutes) + '</span></div>' +
+      '<div style="font-size:14px;color:var(--sub);line-height:1.5">여러 번에 나눠 하는 긴 일 같아요. 언제까지 끝내야 하나요?</div>' +
+      '<div class="grid4"><button class="btn" data-act="dl" data-id="'+need.id+'" data-v="7">일주일</button><button class="btn" data-act="dl" data-id="'+need.id+'" data-v="30">한 달</button>' +
+      '<button class="btn" data-act="dlpick" data-id="'+need.id+'">날짜</button><button class="btn" data-act="dl" data-id="'+need.id+'" data-v="none">없음</button></div>' +
+      '<input type="date" id="dlinput" class="input" style="display:none" aria-label="마감 날짜" data-id="'+need.id+'"></div>';
+  }
+  h += '<div class="field"><div class="between"><div class="small">적은 것 ' + items.length + '개</div>' +
+    '<div class="legend"><span><span class="dot" style="background:#6B7280"></span>추정</span><span><span class="dot" style="background:var(--ok)"></span>내 기록</span></div></div>';
+  if(!items.length) h += '<div class="empty">아직 아무것도 없어요.<br>설거지, 샤워, 공부처럼 떠오르는 대로 적어보세요.</div>';
+  else {
+    h += '<div class="chips">';
+    items.forEach(function(t){
+      var m = t.minutesSource === "pending" ? '<span class="m src-est">· 추정 중</span>' : '<span class="m ' + srcClass(t) + '">· ' + fmtMin(t.minutes) + '</span>';
+      var dl = t.deadline ? '<span class="m" style="color:var(--warn)">· ~' + fmtDeadline(t.deadline) + '</span>' : '';
+      h += '<a class="chip" href="#item/' + t.id + '" style="text-decoration:none">' + esc(t.name) + m + dl + '</a>';
+    });
+    h += '</div><div class="small">누르면 시간이나 마감을 고칠 수 있어요</div>';
+  }
+  h += '</div>';
+  if(items.length) h += '<a href="#now" class="btn primary big" style="display:flex;align-items:center;justify-content:center;text-decoration:none">순서 정해줘</a>';
+  return h + '</div>';
+}
+
+function viewNow(){
+  if(S.timer){ return viewTimer(); }
+  var p = makePlan(), h = '<div class="wrap">';
+  h += '<div class="between"><div class="sub">오늘 ' + p.done.length + '개 완료 · 남은 계획 ' + fmtMin(p.used) + '</div><a href="#plan" style="font-size:14px;text-decoration:none">전체 보기</a></div>';
+  if(p.avail === 0){
+    h += '<div class="card empty">취침 목표 시간이 지났어요.<br>지금은 자는 게 1순위예요. 나머지는 내일 앱이 다시 정리할게요.</div>';
+    return h + '</div>';
+  }
+  var x = p.now[0];
+  if(!x){
+    h += '<div class="card empty">' + (S.tasks.length ? '오늘은 더 안 해도 돼요.<br>남은 건 앱이 알맞은 때로 옮겨뒀어요.' : '할 일을 먼저 적어주세요.') + '</div>';
+    return h + '</div>';
+  }
+  var t = x.t, pr = x.sc.parts;
+  h += '<div><div class="sub">지금 할 것</div><div class="small">이것만 보세요. 나머지는 앱이 기억해요.</div></div>';
+  h += '<div class="card" style="padding:26px 20px;gap:18px;border-radius:24px">' +
+    '<div><div style="font-size:38px;font-weight:700;line-height:1.2">' + esc(t.name) + '</div>' +
+    '<div style="font-size:15px;color:var(--sub);margin-top:6px">' + fmtMin(t.minutes) + ' · <span class="' + srcClass(t) + '">' + srcLabel(t) + '</span> · 에너지 ' + (t.energy === "high" ? "높음" : "낮음") + '</div></div>';
+  if(t.firstStep) h += '<div style="font-size:14px;color:var(--sub);padding:12px 14px;background:var(--bg);border-radius:12px">첫 동작: ' + esc(t.firstStep) + '</div>';
+  h += '<div style="display:flex;flex-direction:column;gap:9px"><div class="small">추천 이유</div>' +
+    bar("밀린 정도", Math.min(pr.overdue/2,1), "var(--accent)") + bar("마감", pr.deadline, "var(--warn)") + bar("시간대", pr.fit, "var(--accent)") +
+    '<div class="small">' + esc(x.sc.reasons.join(" · ")) + '</div></div>' +
+    '<button class="btn primary big" data-act="start" data-id="' + t.id + '">▶ 시작 · ' + pad(t.minutes) + ':00</button>' +
+    '<div class="grid2"><button class="btn" data-act="snooze" data-id="' + t.id + '">조금 이따</button><button class="btn" data-act="tomorrow" data-id="' + t.id + '">내일 첫 순서로</button></div>' +
+    '<button class="btn" data-act="quickdone" data-id="' + t.id + '" style="height:40px;font-size:13px;color:var(--muted);border:none">타이머 없이 완료 처리</button></div>';
+  if(p.now.length > 1){
+    h += '<div class="field"><div class="small">다음 순서</div><div>';
+    p.now.slice(1, 5).forEach(function(y){ h += '<div class="list-item"><span>' + esc(y.t.name) + '</span><span class="sub">' + fmtMin(y.t.minutes) + '</span></div>'; });
+    h += '</div></div>';
+  }
+  if(p.later.length) h += '<a href="#plan" class="card" style="text-decoration:none;color:var(--sub);flex-direction:row;justify-content:space-between;font-size:14px"><span>오늘은 안 해도 돼요 · ' + p.later.length + '개</span><span>›</span></a>';
+  return h + '</div>';
+}
+function bar(label, v, color){
+  return '<div class="row" style="gap:10px"><div style="width:72px;font-size:13px;color:var(--sub)">' + label + '</div><div class="bar"><div style="width:' + Math.round(Math.max(0.03, v) * 100) + '%;background:' + color + '"></div></div></div>';
+}
+
+function viewTimer(){
+  var t = find(S.timer.taskId);
+  if(!t){ S.timer = null; save(); return viewNow(); }
+  return '<div class="wrap" style="padding-top:60px;gap:28px">' +
+    '<div style="text-align:center"><div class="sub">지금 하는 중</div><div style="font-size:30px;font-weight:700;margin-top:6px">' + esc(t.name) + '</div></div>' +
+    '<div class="timer" id="timerText">--:--</div><div class="small" id="timerSub" style="text-align:center"></div>' +
+    (t.firstStep ? '<div class="card" style="text-align:center;font-size:14px;color:var(--sub)">첫 동작: ' + esc(t.firstStep) + '</div>' : '') +
+    '<button class="btn primary big" data-act="finish">완료</button>' +
+    '<button class="btn" data-act="cancel">그만두기 (기록 안 함)</button></div>';
+}
+
+function viewPlan(){
+  var p = makePlan(), h = '<div class="wrap"><h1>오늘 계획</h1>';
+  h += '<div class="sub">취침 ' + esc(S.settings.bedtime) + '까지 ' + fmtMin(p.avail) + ' 중 ' + fmtMin(p.used) + ' 배치</div>';
+  h += '<div class="card"><h2>오늘 할 것</h2><div>';
+  if(!p.now.length) h += '<div class="small">없어요</div>';
+  p.now.forEach(function(x, i){ h += '<div class="list-item"><div><button data-go="#item/' + x.t.id + '">' + (i+1) + '. ' + esc(x.t.name) + '</button><div class="reason">' + esc(x.sc.reasons.join(" · ")) + '</div></div><span class="sub">' + fmtMin(x.t.minutes) + '</span></div>'; });
+  h += '</div></div>';
+  if(p.later.length){
+    h += '<div class="card"><h2>나중에</h2><div>';
+    p.later.forEach(function(x){ h += '<div class="list-item"><div><button data-go="#item/' + x.t.id + '">' + esc(x.t.name) + '</button><div class="reason">' + esc(x.why) + (x.t.deadline ? ' · 마감 ' + fmtDeadline(x.t.deadline) : '') + '</div></div><span class="sub">' + fmtMin(x.t.minutes) + '</span></div>'; });
+    h += '</div></div>';
+  }
+  if(p.done.length){
+    h += '<div class="card"><h2>오늘 한 것</h2><div class="chips">';
+    p.done.forEach(function(t){ h += '<span class="chip" style="background:#1F3A30;color:var(--ok)">✓ ' + esc(t.name) + '</span>'; });
+    h += '</div></div>';
+  }
+  h += '<div class="small" style="line-height:1.6">타이머로 실제 걸린 시간이 3번 이상 쌓이면, AI 추정 대신 내 평균 시간으로 자동으로 바뀌어요.</div>';
+  return h + '</div>';
+}
+
+function viewItem(id){
+  var t = find(id);
+  if(!t) return '<div class="wrap"><div class="empty">없는 할 일이에요.</div></div>';
+  var recs = (t.records || []).slice(-6), max = 1;
+  recs.forEach(function(r){ if(r.minutes > max) max = r.minutes; });
+  var h = '<div class="wrap"><div class="row"><button class="btn icon" style="border:none" data-act="back" aria-label="뒤로"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><h1 style="font-size:20px">' + esc(t.name) + '</h1></div>';
+  h += '<div class="card"><div class="small">예상 시간</div><div class="row" style="align-items:baseline;gap:10px"><div style="font-size:38px;font-weight:700">' + fmtMin(t.minutes) + '</div><span class="tag ' + srcClass(t) + '">' + srcLabel(t) + (t.minutesSource === "record" ? ' (' + recs.length + '회)' : '') + '</span></div>' +
+    (t.aiError ? '<div class="small danger">AI 추정에 실패해서 임시값을 넣었어요. 설정에서 API 키를 확인해주세요.</div>' : '') +
+    '<div class="field"><label for="minEdit">직접 정하기 (분)</label><div class="row"><input id="minEdit" type="number" min="1" class="input" value="' + t.minutes + '"><button class="btn" data-act="setmin" data-id="' + t.id + '">저장</button></div></div></div>';
+  h += '<div class="field"><div class="small">최근 타이머 기록 (분)</div>';
+  if(recs.length){
+    h += '<div class="chart">';
+    recs.forEach(function(r){ h += '<div class="col"><span>' + r.minutes + '</span><div style="height:' + Math.round(r.minutes / max * 90) + 'px"></div></div>'; });
+    h += '</div>';
+  } else h += '<div class="small">아직 기록이 없어요. 타이머로 한 번 해보면 실제 시간이 쌓여요.</div>';
+  h += '</div>';
+  h += '<div class="card"><div class="field"><label>에너지</label><div class="seg"><button class="' + (t.energy !== "high" ? "on" : "") + '" data-act="energy" data-id="' + t.id + '" data-v="low">낮음</button><button class="' + (t.energy === "high" ? "on" : "") + '" data-act="energy" data-id="' + t.id + '" data-v="high">높음</button></div></div>' +
+    '<div class="field"><label for="freqEdit">반복 주기 (일, 비우면 한 번만) · ' + ({record:"완료 기록으로 계산", user:"직접 입력", est:"추정"}[t.freqSource] || "추정") + '</label><div class="row"><input id="freqEdit" type="number" min="1" class="input" value="' + (t.freqDays || "") + '"><button class="btn" data-act="setfreq" data-id="' + t.id + '">저장</button></div></div>' +
+    '<div class="field"><label for="dlEdit">마감</label><div class="row"><input id="dlEdit" type="date" class="input" value="' + (t.deadline || "") + '"><button class="btn" data-act="setdl" data-id="' + t.id + '">저장</button></div></div>' +
+    '<div class="field"><label for="fsEdit">첫 동작</label><div class="row"><input id="fsEdit" class="input" value="' + esc(t.firstStep || "") + '"><button class="btn" data-act="setfs" data-id="' + t.id + '">저장</button></div></div>' +
+    '<div class="between"><label for="autolearn" style="color:var(--text);font-size:14px;line-height:1.5">기록으로 자동 조정<br><span class="small">3회 이상 쌓이면 내 평균을 써요</span></label><input id="autolearn" class="toggle" type="checkbox" data-act="autolearn" data-id="' + t.id + '"' + (t.autoLearn !== false ? " checked" : "") + '></div></div>';
+  h += '<button class="btn danger" data-act="delete" data-id="' + t.id + '">이 할 일 삭제</button>';
+  return h + '</div>';
+}
+
+function viewSettings(){
+  return '<div class="wrap"><h1>설정</h1>' +
+    '<div class="card"><div class="field"><label for="bt">취침 목표 시간</label><input id="bt" type="time" class="input" value="' + esc(S.settings.bedtime) + '"></div>' +
+    '<div class="field"><label for="key">Claude API 키 (선택)</label><input id="key" type="password" class="input" placeholder="sk-ant-..." value="' + esc(S.settings.apiKey) + '" autocomplete="off">' +
+    '<div class="small" style="line-height:1.6">넣으면 기본값 사전에 없는 할 일을 AI가 추정해요. 키는 이 기기에만 저장돼요.</div></div>' +
+    '<div class="field"><label for="model">모델</label><input id="model" class="input" value="' + esc(S.settings.model) + '"></div>' +
+    '<button class="btn primary" data-act="savesettings">저장</button></div>' +
+    '<div class="card"><button class="btn" data-act="reest">추정값 다시 받기 (기록 없는 항목)</button>' +
+    '<button class="btn danger" data-act="reset">모든 데이터 지우기</button></div></div>';
+}
+
+function render(){
+  var r = route(), h;
+  if(r.name === "now") h = viewNow();
+  else if(r.name === "plan") h = viewPlan();
+  else if(r.name === "item") h = viewItem(r.id);
+  else if(r.name === "settings") h = viewSettings();
+  else h = viewDump();
+  app.innerHTML = h;
+  var navs = document.querySelectorAll("[data-nav]");
+  for(var i=0;i<navs.length;i++) navs[i].className = navs[i].getAttribute("data-nav") === (r.name === "item" ? "dump" : r.name) ? "on" : "";
+  tick();
+}
+
+// ---------- 타이머 ----------
+var buzzed = false;
+function tick(){
+  if(!S.timer) return;
+  var el = document.getElementById("timerText"), sub = document.getElementById("timerSub");
+  if(!el) return;
+  var elapsed = Math.floor((Date.now() - S.timer.start) / 1000), left = S.timer.planned * 60 - elapsed;
+  var a = Math.abs(left);
+  el.textContent = (left < 0 ? "+" : "") + pad(Math.floor(a / 60)) + ":" + pad(a % 60);
+  el.style.color = left < 0 ? "var(--warn)" : "var(--text)";
+  sub.textContent = left < 0 ? "예상보다 오래 걸리는 중 · 이것도 기록돼요" : "경과 " + Math.floor(elapsed / 60) + "분";
+  if(left <= 0 && !buzzed){ buzzed = true; try { navigator.vibrate && navigator.vibrate([300,150,300]); } catch(e){} }
+}
+setInterval(tick, 1000);
+
+function complete(t, minutes){
+  var tk = today();
+  t.completions = t.completions || [];
+  if(t.completions.indexOf(tk) < 0) t.completions.push(tk);
+  t.lastDone = tk;
+  if(minutes){ t.records = t.records || []; t.records.push({date:tk, minutes:minutes}); }
+  learn(t);
+  if(!t.freqDays && !t.longTerm) t.archived = true; // 한 번만 하는 일은 완료 후 목록에서 내림
+}
+
+// ---------- 이벤트 ----------
+document.addEventListener("submit", function(e){
+  if(e.target.getAttribute("data-form") === "add"){
+    e.preventDefault();
+    var inp = document.getElementById("newtask"), name = inp.value.trim();
+    if(!name) return;
+    var t = {id:uid(), name:name, minutes:15, minutesSource:"pending", energy:"low", freqDays:null, freqSource:"est", records:[], completions:[], autoLearn:true, created:Date.now()};
+    S.tasks.push(t); save(); render();
+    var n = document.getElementById("newtask"); if(n) n.focus();
+    estimate(t);
+  }
+});
+document.addEventListener("change", function(e){
+  var el = e.target;
+  if(el.id === "dlinput" && el.value){ var t = find(el.getAttribute("data-id")); t.deadline = el.value; t.needsDeadline = false; save(); render(); }
+  if(el.getAttribute("data-act") === "autolearn"){ var t2 = find(el.getAttribute("data-id")); t2.autoLearn = el.checked; learn(t2); save(); render(); }
+});
+document.addEventListener("click", function(e){
+  var go = e.target.closest("[data-go]");
+  if(go){ location.hash = go.getAttribute("data-go"); return; }
+  var b = e.target.closest("[data-act]");
+  if(!b || b.tagName === "INPUT") return;
+  var act = b.getAttribute("data-act"), t = b.getAttribute("data-id") ? find(b.getAttribute("data-id")) : null, v = b.getAttribute("data-v");
+  switch(act){
+    case "dl":
+      if(v === "none"){ t.noDeadline = true; } else { t.deadline = addDays(today(), +v); }
+      t.needsDeadline = false; break;
+    case "dlpick": var di = document.getElementById("dlinput"); di.style.display = "block"; try { di.showPicker && di.showPicker(); } catch(x){} di.focus(); return;
+    case "start": S.timer = {taskId:t.id, start:Date.now(), planned:t.minutes}; buzzed = false; break;
+    case "finish":
+      var tt = find(S.timer.taskId), mins = Math.max(1, Math.round((Date.now() - S.timer.start) / 60000));
+      if(tt) complete(tt, mins);
+      S.timer = null; break;
+    case "cancel": S.timer = null; break;
+    case "snooze": t.snoozed = today(); break;
+    case "tomorrow": t.postponedUntil = addDays(today(), 1); t.snoozed = null; break;
+    case "quickdone": complete(t, null); break;
+    case "back": history.length > 1 ? history.back() : (location.hash = "#dump"); return;
+    case "setmin": var m = parseInt(document.getElementById("minEdit").value, 10); if(m > 0){ t.minutes = m; t.minutesSource = "user"; t.autoLearn = false; } break;
+    case "setfreq": var f = parseInt(document.getElementById("freqEdit").value, 10); t.freqDays = f > 0 ? f : null; t.freqSource = "user"; break;
+    case "setdl": var d = document.getElementById("dlEdit").value; t.deadline = d || null; t.needsDeadline = false; break;
+    case "setfs": t.firstStep = document.getElementById("fsEdit").value.trim(); break;
+    case "energy": t.energy = v; break;
+    case "delete": if(confirm("'" + t.name + "'을(를) 삭제할까요?")){ S.tasks = S.tasks.filter(function(x){ return x.id !== t.id; }); save(); location.hash = "#dump"; } return;
+    case "savesettings":
+      S.settings.bedtime = document.getElementById("bt").value || "00:30";
+      S.settings.apiKey = document.getElementById("key").value.trim();
+      S.settings.model = document.getElementById("model").value.trim() || "claude-haiku-5-5";
+      save(); b.textContent = "저장했어요"; setTimeout(render, 900); return;
+    case "reest":
+      S.tasks.forEach(function(x){ if(x.minutesSource !== "record" && x.minutesSource !== "user"){ x.minutesSource = "pending"; x.aiError = false; estimate(x); } });
+      break;
+    case "reset": if(confirm("모든 할 일과 기록을 지울까요?")){ S = defaultState(); } else return; break;
+  }
+  save(); render();
+});
+window.addEventListener("hashchange", render);
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) render(); });
+render();
+})();
+</script>
+</body>
+</html>
