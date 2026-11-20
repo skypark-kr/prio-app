@@ -54,9 +54,11 @@ nav a.on{color:var(--accent)}
 .danger{color:#FF8A80}
 label{font-size:13px;color:var(--muted)}
 .field{display:flex;flex-direction:column;gap:6px}
+.field>.input{flex:none}
 .seg{display:flex;gap:8px}
 .seg button{flex:1;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer}
 .seg button.on{background:var(--accent);color:#121417;border:none;font-weight:700}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -102,11 +104,51 @@ var DICT = [
 ];
 
 // ---------- 저장 ----------
-function defaultState(){ return {tasks:[], settings:{bedtime:"00:30", apiKey:"", model:"claude-haiku-5-5"}, timer:null}; }
+function defaultNotify(){ return {timer:true, snooze:true, bedtime:true, bedtimeBefore:60}; }
+function defaultState(){ return {tasks:[], settings:{bedtime:"00:30", apiKey:"", model:"claude-haiku-5-5", notify:defaultNotify()}, timer:null}; }
 var S;
 try { S = JSON.parse(localStorage.getItem(KEY)) || defaultState(); } catch(e){ S = defaultState(); }
 if(!S.settings) S.settings = defaultState().settings;
+if(!S.settings.notify) S.settings.notify = defaultNotify();
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+
+// ---------- 알림 (안드로이드 앱에서만 동작) ----------
+var NB = window.AndroidBridge || null;
+function notifySchedule(id, at, title, body, daily, hash){
+  if(!NB) return;
+  try { NB.schedule(id, String(Math.round(at)), title, body, !!daily, hash || "#now"); } catch(e){}
+}
+function notifyCancel(id){ if(!NB) return; try { NB.cancel(id); } catch(e){} }
+function scheduleTimerAlarm(){
+  notifyCancel("timer");
+  if(!S.timer || !S.settings.notify.timer) return;
+  var t = find(S.timer.taskId); if(!t) return;
+  var at = S.timer.start + S.timer.planned * 60000;
+  if(at <= Date.now()) return;
+  notifySchedule("timer", at, "'" + t.name + "' " + S.timer.planned + "분이 지났어요",
+    S.timer.short ? "여기서 멈춰도 되고, 이어가도 돼요." : "완료하거나 조금 더 해도 돼요. 실제 걸린 시간은 그대로 기록돼요.", false, "#now");
+}
+function scheduleSnoozeAlarm(t){
+  notifyCancel("snooze-" + t.id);
+  if(!S.settings.notify.snooze || !(t.snoozeUntil > Date.now())) return;
+  notifySchedule("snooze-" + t.id, t.snoozeUntil, "'" + t.name + "' 다시 해볼까요?",
+    t.resumeNote ? "이어서 할 동작: " + t.resumeNote : (t.firstStep ? "첫 동작: " + t.firstStep : "30분이 지났어요. 5분만 해봐도 돼요."), false, "#now");
+}
+function syncBedtimeAlarm(){
+  notifyCancel("bedtime");
+  var n = S.settings.notify;
+  if(!n.bedtime) return;
+  var p = (S.settings.bedtime || "00:30").split(":"), c = new Date();
+  c.setHours(+p[0], +p[1], 0, 0);
+  c = new Date(c.getTime() - (n.bedtimeBefore || 60) * 60000);
+  while(c.getTime() <= Date.now()) c = new Date(c.getTime() + 86400000);
+  notifySchedule("bedtime", c.getTime(), "취침 " + (n.bedtimeBefore || 60) + "분 전이에요", "남은 일 중에 지금 할 것 하나만 골라드릴게요.", true, "#now");
+}
+function syncAlarms(){
+  scheduleTimerAlarm();
+  S.tasks.forEach(function(t){ if(t.snoozeUntil > Date.now()) scheduleSnoozeAlarm(t); });
+  syncBedtimeAlarm();
+}
 
 // ---------- 날짜 ----------
 function pad(n){ return (n<10?"0":"")+n; }
@@ -192,7 +234,13 @@ function learn(t){
 }
 
 // ---------- 점수 ----------
+function pinned(t){ return S.pin && S.pin.day === today() && S.pin.id === t.id; }
+function remaining(t){ return Math.max(1, Math.ceil(t.minutes - (t.progressMs || 0) / 60000)); }
+function canSplit(t){
+  return t.splittable == null ? !!(t.longTerm || t.progressMs || /공부|시험|연습|독서|정리|청소/.test(t.name)) : t.splittable;
+}
 function isActive(t, tk){
+  if(t.snoozeUntil > Date.now()) return false;
   if(t.archived) return false;
   if(t.postponedUntil && tk < t.postponedUntil) return false;
   if(t.completions && t.completions.indexOf(tk) >= 0) return false;
@@ -226,18 +274,22 @@ function score(t){
   } else if(h < 12 && t.energy === "high"){ s += 0.7; fit = 0.9; reasons.push("오전은 집중하기 좋은 시간"); }
   else if(h >= 18 && t.energy === "low"){ s += 0.3; fit = 0.7; }
   parts.fit = fit;
-  if(t.snoozed === tk){ s -= 0.8; }
+  if(pinned(t)) reasons.unshift("오늘 꼭 할 일");
   return {s:s, reasons:reasons, parts:parts};
 }
 function makePlan(){
   var tk = today(), avail = minutesToBed(), used = 0, list = [];
+  if(S.windowEnd && dayKey(new Date(S.windowEnd)) !== tk && S.windowEnd <= Date.now()){ S.windowEnd = null; save(); }
+  if(S.windowEnd) avail = Math.min(avail, Math.max(0, Math.ceil((S.windowEnd - Date.now())/60000)));
   S.tasks.forEach(function(t){ if(isActive(t, tk) && t.minutesSource !== "pending"){ var sc = score(t); list.push({t:t, sc:sc}); } });
-  list.sort(function(a,b){ return b.sc.s - a.sc.s; });
+  list.sort(function(a,b){ return Number(!!pinned(b.t)) - Number(!!pinned(a.t)) || b.sc.s - a.sc.s; });
   var now = [], later = [];
   list.forEach(function(x){
-    if(x.sc.s > 0.8 && used + x.t.minutes <= avail){ now.push(x); used += x.t.minutes; }
+    var left = avail - used, full = remaining(x.t);
+    x.slot = full > left && canSplit(x.t) && left >= 5 ? Math.floor(left) : full;
+    if((pinned(x.t) || x.sc.s > 0.8 || (S.windowEnd && canSplit(x.t))) && x.slot <= left){ now.push(x); used += x.slot; }
     else {
-      var why = avail === 0 ? "취침 시간이 지났어요" : x.sc.s <= 0.8 ? (x.t.energy === "high" && (new Date().getHours() >= 22 || new Date().getHours() < 5) ? "에너지 높은 일 → 여유 있는 낮 시간에" : "급하지 않아요") : "오늘 남은 시간이 부족해요";
+      var why = avail === 0 ? "사용 가능한 시간이 끝났어요" : x.sc.s <= 0.8 ? (x.t.energy === "high" && (new Date().getHours() >= 22 || new Date().getHours() < 5) ? "에너지 높은 일 → 여유 있는 낮 시간에" : "급하지 않아요") : "오늘 남은 시간이 부족해요";
       later.push({t:x.t, sc:x.sc, why:why});
     }
   });
@@ -273,9 +325,9 @@ function viewDump(){
     items.forEach(function(t){
       var m = t.minutesSource === "pending" ? '<span class="m src-est">· 추정 중</span>' : '<span class="m ' + srcClass(t) + '">· ' + fmtMin(t.minutes) + '</span>';
       var dl = t.deadline ? '<span class="m" style="color:var(--warn)">· ~' + fmtDeadline(t.deadline) + '</span>' : '';
-      h += '<a class="chip" href="#item/' + t.id + '" style="text-decoration:none">' + esc(t.name) + m + dl + '</a>';
+      h += '<a class="chip" href="#item/' + t.id + '" style="text-decoration:none">' + (pinned(t) ? '★ ' : '') + esc(t.name) + m + dl + '</a>';
     });
-    h += '</div><div class="small">누르면 시간이나 마감을 고칠 수 있어요</div>';
+    h += '</div><div class="small">할 일을 눌러 오늘 꼭 할 일 ★, 예상 시간, 마감을 정하세요.</div>';
   }
   h += '</div>';
   if(items.length) h += '<a href="#now" class="btn primary big" style="display:flex;align-items:center;justify-content:center;text-decoration:none">순서 정해줘</a>';
@@ -286,13 +338,24 @@ function viewNow(){
   if(S.timer){ return viewTimer(); }
   var p = makePlan(), h = '<div class="wrap">';
   h += '<div class="between"><div class="sub">오늘 ' + p.done.length + '개 완료 · 남은 계획 ' + fmtMin(p.used) + '</div><a href="#plan" style="font-size:14px;text-decoration:none">전체 보기</a></div>';
+  h += '<div class="field"><label for="budget">지금 쓸 수 있는 시간</label><select id="budget" class="input">';
+  [0,5,10,20,30,60].forEach(function(m){
+    h += '<option value="'+m+'"'+((S.windowEnd ? S.windowSize : 0) === m ? ' selected' : '')+'>'+(m ? m+'분' : '취침까지')+'</option>';
+  });
+  h += '</select></div>';
+  if(p.avail === 0 && S.windowEnd && minutesToBed() > 0){
+    return h + '<div class="card empty">정한 시간이 끝났어요.</div><button class="btn" data-act="extend">같은 시간으로 다시 시작</button></div>';
+  }
   if(p.avail === 0){
     h += '<div class="card empty">취침 목표 시간이 지났어요.<br>지금은 자는 게 1순위예요. 나머지는 내일 앱이 다시 정리할게요.</div>';
     return h + '</div>';
   }
   var x = p.now[0];
+  if(!x && S.tasks.some(function(task){return task.snoozeUntil > Date.now() && !task.archived;})){
+    return h+'<div class="card empty">지금 추천할 일이 없어요. 미룬 일은 30분 뒤 다시 후보에 들어와요.</div></div>';
+  }
   if(!x){
-    h += '<div class="card empty">' + (S.tasks.length ? '오늘은 더 안 해도 돼요.<br>남은 건 앱이 알맞은 때로 옮겨뒀어요.' : '할 일을 먼저 적어주세요.') + '</div>';
+    h += '<div class="card empty">' + (S.tasks.length ? '지금 조건에 맞는 추천이 없어요.<br>전체 보기에서 남은 일을 확인할 수 있어요.' : '할 일을 먼저 적어주세요.') + '</div>';
     return h + '</div>';
   }
   var t = x.t, pr = x.sc.parts;
@@ -300,16 +363,18 @@ function viewNow(){
   h += '<div class="card" style="padding:26px 20px;gap:18px;border-radius:24px">' +
     '<div><div style="font-size:38px;font-weight:700;line-height:1.2">' + esc(t.name) + '</div>' +
     '<div style="font-size:15px;color:var(--sub);margin-top:6px">' + fmtMin(t.minutes) + ' · <span class="' + srcClass(t) + '">' + srcLabel(t) + '</span> · 에너지 ' + (t.energy === "high" ? "높음" : "낮음") + '</div></div>';
-  if(t.firstStep) h += '<div style="font-size:14px;color:var(--sub);padding:12px 14px;background:var(--bg);border-radius:12px">첫 동작: ' + esc(t.firstStep) + '</div>';
+  if(t.progressMs) h += '<div class="small">누적 진행 '+duration(t.progressMs)+' · 예상 잔여 '+fmtMin(remaining(t))+'</div>';
+  if(t.resumeNote) h += '<div class="card">이어서 할 동작 · '+esc(t.resumeNote)+'</div>';
+  else if(t.firstStep) h += '<div style="font-size:14px;color:var(--sub);padding:12px 14px;background:var(--bg);border-radius:12px">첫 동작: ' + esc(t.firstStep) + '</div>';
   h += '<div style="display:flex;flex-direction:column;gap:9px"><div class="small">추천 이유</div>' +
     bar("밀린 정도", Math.min(pr.overdue/2,1), "var(--accent)") + bar("마감", pr.deadline, "var(--warn)") + bar("시간대", pr.fit, "var(--accent)") +
     '<div class="small">' + esc(x.sc.reasons.join(" · ")) + '</div></div>' +
-    '<button class="btn primary big" data-act="start" data-id="' + t.id + '">▶ 시작 · ' + pad(t.minutes) + ':00</button>' +
-    '<div class="grid2"><button class="btn" data-act="snooze" data-id="' + t.id + '">조금 이따</button><button class="btn" data-act="tomorrow" data-id="' + t.id + '">내일 첫 순서로</button></div>' +
+    startButtons(t, x.slot) +
+    '<div class="grid2"><button class="btn" data-act="snooze" data-id="' + t.id + '">30분 뒤에 다시</button><button class="btn" data-act="tomorrow" data-id="' + t.id + '">내일 다시 추천</button></div>' +
     '<button class="btn" data-act="quickdone" data-id="' + t.id + '" style="height:40px;font-size:13px;color:var(--muted);border:none">타이머 없이 완료 처리</button></div>';
   if(p.now.length > 1){
     h += '<div class="field"><div class="small">다음 순서</div><div>';
-    p.now.slice(1, 5).forEach(function(y){ h += '<div class="list-item"><span>' + esc(y.t.name) + '</span><span class="sub">' + fmtMin(y.t.minutes) + '</span></div>'; });
+    p.now.slice(1, 5).forEach(function(y){ h += '<div class="list-item"><span>' + esc(y.t.name) + '</span><span class="sub">' + fmtMin(y.slot) + '</span></div>'; });
     h += '</div></div>';
   }
   if(p.later.length) h += '<a href="#plan" class="card" style="text-decoration:none;color:var(--sub);flex-direction:row;justify-content:space-between;font-size:14px"><span>오늘은 안 해도 돼요 · ' + p.later.length + '개</span><span>›</span></a>';
@@ -319,27 +384,46 @@ function bar(label, v, color){
   return '<div class="row" style="gap:10px"><div style="width:72px;font-size:13px;color:var(--sub)">' + label + '</div><div class="bar"><div style="width:' + Math.round(Math.max(0.03, v) * 100) + '%;background:' + color + '"></div></div></div>';
 }
 
+function startButtons(t, slot){
+  var partial = slot < remaining(t);
+  var label = partial ? fmtMin(slot) + '만 시작' : (t.progressMs ? '이어서 하기' : '시작') + ' · ' + fmtMin(slot);
+  var main = '<button class="btn primary big" data-act="'+(partial ? 'short' : 'start')+'" data-id="'+t.id+'" data-v="'+slot+'">'+label+'</button>';
+  if(slot > 5) main += '<button class="btn" data-act="short" data-id="'+t.id+'" data-v="5">5분만 시작</button>';
+  return main;
+}
+function duration(ms){
+  var sec = Math.floor(ms / 1000);
+  return Math.floor(sec/60)+'분 '+sec%60+'초';
+}
+function elapsedMs(){
+  // 짧게 시작해도 실제로 한 시간은 전부 기록
+  return Math.max(0, Date.now() - S.timer.start);
+}
+function bankProgress(t){ t.progressMs = (t.progressMs || 0) + elapsedMs(); }
 function viewTimer(){
   var t = find(S.timer.taskId);
   if(!t){ S.timer = null; save(); return viewNow(); }
   return '<div class="wrap" style="padding-top:60px;gap:28px">' +
     '<div style="text-align:center"><div class="sub">지금 하는 중</div><div style="font-size:30px;font-weight:700;margin-top:6px">' + esc(t.name) + '</div></div>' +
     '<div class="timer" id="timerText">--:--</div><div class="small" id="timerSub" style="text-align:center"></div>' +
-    (t.firstStep ? '<div class="card" style="text-align:center;font-size:14px;color:var(--sub)">첫 동작: ' + esc(t.firstStep) + '</div>' : '') +
-    '<button class="btn primary big" data-act="finish">완료</button>' +
-    '<button class="btn" data-act="cancel">그만두기 (기록 안 함)</button></div>';
+    ((t.resumeNote || t.firstStep) ? '<div class="card" style="text-align:center;font-size:14px;color:var(--sub)">지금 할 동작 · ' + esc(t.resumeNote || t.firstStep) + '</div>' : '') +
+    (S.timer.short ? '<button class="btn primary" id="continueTimer" data-act="continue" hidden>계속하기</button>' : '') +
+    '<label class="field">다음에 이어서 할 동작 (선택)<input class="input" id="resumeDraft" placeholder="예: 두 번째 문제부터 풀기" value="'+esc(S.timer.note == null ? t.resumeNote || '' : S.timer.note)+'"></label>' +
+    '<button class="btn" data-act="pause">여기까지 저장</button>' +
+    '<button class="btn primary big" data-act="finish">할 일 전체 완료</button>' +
+    '<button class="btn" data-act="cancel">이번 구간 기록 취소</button></div>';
 }
 
 function viewPlan(){
   var p = makePlan(), h = '<div class="wrap"><h1>오늘 계획</h1>';
-  h += '<div class="sub">취침 ' + esc(S.settings.bedtime) + '까지 ' + fmtMin(p.avail) + ' 중 ' + fmtMin(p.used) + ' 배치</div>';
+  h += '<div class="sub">지금 쓸 수 있는 ' + fmtMin(p.avail) + ' 중 ' + fmtMin(p.used) + ' 배치</div>';
   h += '<div class="card"><h2>오늘 할 것</h2><div>';
   if(!p.now.length) h += '<div class="small">없어요</div>';
-  p.now.forEach(function(x, i){ h += '<div class="list-item"><div><button data-go="#item/' + x.t.id + '">' + (i+1) + '. ' + esc(x.t.name) + '</button><div class="reason">' + esc(x.sc.reasons.join(" · ")) + '</div></div><span class="sub">' + fmtMin(x.t.minutes) + '</span></div>'; });
+  p.now.forEach(function(x, i){ h += '<div class="list-item"><div><button data-go="#item/' + x.t.id + '">' + (i+1) + '. ' + esc(x.t.name) + '</button><div class="reason">' + esc(x.sc.reasons.join(" · ")) + '</div></div><span class="sub">' + fmtMin(x.slot) + (x.slot < remaining(x.t) ? '만 시작' : '') + '</span></div>'; });
   h += '</div></div>';
   if(p.later.length){
     h += '<div class="card"><h2>나중에</h2><div>';
-    p.later.forEach(function(x){ h += '<div class="list-item"><div><button data-go="#item/' + x.t.id + '">' + esc(x.t.name) + '</button><div class="reason">' + esc(x.why) + (x.t.deadline ? ' · 마감 ' + fmtDeadline(x.t.deadline) : '') + '</div></div><span class="sub">' + fmtMin(x.t.minutes) + '</span></div>'; });
+    p.later.forEach(function(x){ h += '<div class="list-item"><div><button data-go="#item/' + x.t.id + '">' + esc(x.t.name) + '</button><div class="reason">' + esc(x.why) + (x.t.deadline ? ' · 마감 ' + fmtDeadline(x.t.deadline) : '') + '</div></div><span class="sub">' + fmtMin(remaining(x.t)) + '</span></div>'; });
     h += '</div></div>';
   }
   if(p.done.length){
@@ -357,6 +441,9 @@ function viewItem(id){
   var recs = (t.records || []).slice(-6), max = 1;
   recs.forEach(function(r){ if(r.minutes > max) max = r.minutes; });
   var h = '<div class="wrap"><div class="row"><button class="btn icon" style="border:none" data-act="back" aria-label="뒤로"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><h1 style="font-size:20px">' + esc(t.name) + '</h1></div>';
+  h += '<button class="btn" data-act="pin" data-id="'+t.id+'" aria-pressed="'+!!pinned(t)+'">'+(pinned(t) ? '★ 오늘 꼭 할 일 해제' : '☆ 오늘 꼭 할 일로 지정')+'</button>';
+  h += '<label class="between">짧게 나눠 할 수 있어요<input type="checkbox" id="split" data-id="'+t.id+'" '+(canSplit(t) ? 'checked' : '')+'></label>';
+  if(t.progressMs) h += '<div class="card">누적 진행 '+duration(t.progressMs)+(t.resumeNote ? '<br>다음 동작 · '+esc(t.resumeNote) : '')+'</div>';
   h += '<div class="card"><div class="small">예상 시간</div><div class="row" style="align-items:baseline;gap:10px"><div style="font-size:38px;font-weight:700">' + fmtMin(t.minutes) + '</div><span class="tag ' + srcClass(t) + '">' + srcLabel(t) + (t.minutesSource === "record" ? ' (' + recs.length + '회)' : '') + '</span></div>' +
     (t.aiError ? '<div class="small danger">AI 추정에 실패해서 임시값을 넣었어요. 설정에서 API 키를 확인해주세요.</div>' : '') +
     '<div class="field"><label for="minEdit">직접 정하기 (분)</label><div class="row"><input id="minEdit" type="number" min="1" class="input" value="' + t.minutes + '"><button class="btn" data-act="setmin" data-id="' + t.id + '">저장</button></div></div></div>';
@@ -376,12 +463,27 @@ function viewItem(id){
   return h + '</div>';
 }
 
+function notifySettings(){
+  var n = S.settings.notify;
+  function cb(id, on, label, sub){
+    return '<div class="between"><label for="'+id+'" style="color:var(--text);font-size:14px;line-height:1.5">'+label+'<br><span class="small">'+sub+'</span></label><input id="'+id+'" class="toggle" type="checkbox"'+(on ? ' checked' : '')+'></div>';
+  }
+  var opts = [30,60,90].map(function(m){ return '<option value="'+m+'"'+((n.bedtimeBefore||60) === m ? ' selected' : '')+'>'+m+'분 전</option>'; }).join('');
+  return '<div class="field"><div class="small">알림</div>' +
+    (NB ? '' : '<div class="small" style="color:var(--warn)">알림은 안드로이드 앱에서만 울려요.</div>') +
+    cb("nTimer", n.timer, "타이머 끝날 때", "예상 시간이 지나면 알려줘요") +
+    cb("nSnooze", n.snooze, "30분 뒤에 다시", "미룬 일을 30분 뒤에 다시 불러줘요") +
+    cb("nBed", n.bedtime, "취침 전 알림", "매일 한 번, 남은 일 확인하라고 알려줘요") +
+    '<div class="field"><label for="nBedBefore">취침 전 알림 시각</label><select id="nBedBefore" class="input">' + opts + '</select></div></div>';
+}
+
 function viewSettings(){
   return '<div class="wrap"><h1>설정</h1>' +
     '<div class="card"><div class="field"><label for="bt">취침 목표 시간</label><input id="bt" type="time" class="input" value="' + esc(S.settings.bedtime) + '"></div>' +
     '<div class="field"><label for="key">Claude API 키 (선택)</label><input id="key" type="password" class="input" placeholder="sk-ant-..." value="' + esc(S.settings.apiKey) + '" autocomplete="off">' +
     '<div class="small" style="line-height:1.6">넣으면 기본값 사전에 없는 할 일을 AI가 추정해요. 키는 이 기기에만 저장돼요.</div></div>' +
     '<div class="field"><label for="model">모델</label><input id="model" class="input" value="' + esc(S.settings.model) + '"></div>' +
+    notifySettings() +
     '<button class="btn primary" data-act="savesettings">저장</button></div>' +
     '<div class="card"><button class="btn" data-act="reest">추정값 다시 받기 (기록 없는 항목)</button>' +
     '<button class="btn danger" data-act="reset">모든 데이터 지우기</button></div></div>';
@@ -406,14 +508,24 @@ function tick(){
   if(!S.timer) return;
   var el = document.getElementById("timerText"), sub = document.getElementById("timerSub");
   if(!el) return;
-  var elapsed = Math.floor((Date.now() - S.timer.start) / 1000), left = S.timer.planned * 60 - elapsed;
+  var elapsed = Math.floor(elapsedMs() / 1000), left = S.timer.planned * 60 - elapsed;
   var a = Math.abs(left);
   el.textContent = (left < 0 ? "+" : "") + pad(Math.floor(a / 60)) + ":" + pad(a % 60);
   el.style.color = left < 0 ? "var(--warn)" : "var(--text)";
   sub.textContent = left < 0 ? "예상보다 오래 걸리는 중 · 이것도 기록돼요" : "경과 " + Math.floor(elapsed / 60) + "분";
+  if(S.timer.short && left <= 0){
+    sub.textContent = S.timer.planned + "분을 채웠어요. 이어가거나 여기까지 저장하세요.";
+    document.getElementById("continueTimer").hidden = false;
+  }
   if(left <= 0 && !buzzed){ buzzed = true; try { navigator.vibrate && navigator.vibrate([300,150,300]); } catch(e){} }
 }
-setInterval(tick, 1000);
+var lastMinute = null;
+setInterval(function(){
+  var minute = Math.floor(Date.now()/60000);
+  if(!S.timer && (route().name === 'now' || route().name === 'plan') && minute !== lastMinute && document.activeElement.id !== 'budget'){
+    lastMinute = minute; render();
+  } else tick();
+}, 1000);
 
 function complete(t, minutes){
   var tk = today();
@@ -421,6 +533,9 @@ function complete(t, minutes){
   if(t.completions.indexOf(tk) < 0) t.completions.push(tk);
   t.lastDone = tk;
   if(minutes){ t.records = t.records || []; t.records.push({date:tk, minutes:minutes}); }
+  t.progressMs = 0; t.resumeNote = ""; t.snoozeUntil = 0;
+  notifyCancel("snooze-" + t.id);
+  if(pinned(t)) S.pin = null;
   learn(t);
   if(!t.freqDays && !t.longTerm) t.archived = true; // 한 번만 하는 일은 완료 후 목록에서 내림
 }
@@ -437,8 +552,13 @@ document.addEventListener("submit", function(e){
     estimate(t);
   }
 });
+document.addEventListener("input", function(e){
+  if(e.target.id === "resumeDraft" && S.timer){ S.timer.note = e.target.value; save(); }
+});
 document.addEventListener("change", function(e){
   var el = e.target;
+  if(el.id === "budget"){ S.windowSize = Number(el.value); S.windowEnd = S.windowSize ? Date.now()+S.windowSize*60000 : null; save(); render(); }
+  if(el.id === "split"){ find(el.dataset.id).splittable = el.checked; save(); render(); }
   if(el.id === "dlinput" && el.value){ var t = find(el.getAttribute("data-id")); t.deadline = el.value; t.needsDeadline = false; save(); render(); }
   if(el.getAttribute("data-act") === "autolearn"){ var t2 = find(el.getAttribute("data-id")); t2.autoLearn = el.checked; learn(t2); save(); render(); }
 });
@@ -453,36 +573,64 @@ document.addEventListener("click", function(e){
       if(v === "none"){ t.noDeadline = true; } else { t.deadline = addDays(today(), +v); }
       t.needsDeadline = false; break;
     case "dlpick": var di = document.getElementById("dlinput"); di.style.display = "block"; try { di.showPicker && di.showPicker(); } catch(x){} di.focus(); return;
-    case "start": S.timer = {taskId:t.id, start:Date.now(), planned:t.minutes}; buzzed = false; break;
+    case "pin": S.pin = pinned(t) ? null : {day:today(), id:t.id}; break;
+    case "extend": S.windowEnd = Date.now()+S.windowSize*60000; break;
+    case "start":
+    case "short":
+      if(S.timer) return;
+      S.timer = {taskId:t.id, start:Date.now(), planned:act === "short" ? (+v || 5) : remaining(t), short:act === "short"};
+      t.snoozeUntil = 0; notifyCancel("snooze-" + t.id);
+      buzzed = false; scheduleTimerAlarm(); break;
+    case "continue":
+    case "pause":
     case "finish":
-      var tt = find(S.timer.taskId), mins = Math.max(1, Math.round((Date.now() - S.timer.start) / 60000));
-      if(tt) complete(tt, mins);
-      S.timer = null; break;
-    case "cancel": S.timer = null; break;
-    case "snooze": t.snoozed = today(); break;
-    case "tomorrow": t.postponedUntil = addDays(today(), 1); t.snoozed = null; break;
-    case "quickdone": complete(t, null); break;
+      if(!S.timer) return;
+      var tt = find(S.timer.taskId);
+      if(!tt){ S.timer = null; break; }
+      bankProgress(tt);
+      if(S.timer.note != null) tt.resumeNote = S.timer.note.trim();
+      S.timer = null;
+      if(act === "continue"){
+        S.timer = {taskId:tt.id, start:Date.now(), planned:remaining(tt)};
+        buzzed = false;
+      }
+      scheduleTimerAlarm();
+      if(act === "finish") complete(tt, Math.max(1, Math.round(tt.progressMs/60000)));
+      break;
+    case "cancel": S.timer = null; scheduleTimerAlarm(); break;
+    case "snooze": t.snoozeUntil = Date.now()+30*60000; scheduleSnoozeAlarm(t); break;
+    case "tomorrow": t.postponedUntil = addDays(today(), 1); t.snoozed = null; t.snoozeUntil = 0; notifyCancel("snooze-" + t.id); break;
+    case "quickdone":
+      // 그동안 타이머로 쌓은 진행 시간이 있으면 기록으로 남김
+      complete(t, t.progressMs ? Math.max(1, Math.round(t.progressMs/60000)) : null); break;
     case "back": history.length > 1 ? history.back() : (location.hash = "#dump"); return;
     case "setmin": var m = parseInt(document.getElementById("minEdit").value, 10); if(m > 0){ t.minutes = m; t.minutesSource = "user"; t.autoLearn = false; } break;
     case "setfreq": var f = parseInt(document.getElementById("freqEdit").value, 10); t.freqDays = f > 0 ? f : null; t.freqSource = "user"; break;
     case "setdl": var d = document.getElementById("dlEdit").value; t.deadline = d || null; t.needsDeadline = false; break;
     case "setfs": t.firstStep = document.getElementById("fsEdit").value.trim(); break;
     case "energy": t.energy = v; break;
-    case "delete": if(confirm("'" + t.name + "'을(를) 삭제할까요?")){ S.tasks = S.tasks.filter(function(x){ return x.id !== t.id; }); save(); location.hash = "#dump"; } return;
+    case "delete": if(confirm("'" + t.name + "'을(를) 삭제할까요?")){ notifyCancel("snooze-" + t.id); if(S.timer && S.timer.taskId === t.id){ S.timer = null; scheduleTimerAlarm(); } S.tasks = S.tasks.filter(function(x){ return x.id !== t.id; }); save(); location.hash = "#dump"; } return;
     case "savesettings":
       S.settings.bedtime = document.getElementById("bt").value || "00:30";
       S.settings.apiKey = document.getElementById("key").value.trim();
       S.settings.model = document.getElementById("model").value.trim() || "claude-haiku-5-5";
-      save(); b.textContent = "저장했어요"; setTimeout(render, 900); return;
+      S.settings.notify = {
+        timer: document.getElementById("nTimer").checked,
+        snooze: document.getElementById("nSnooze").checked,
+        bedtime: document.getElementById("nBed").checked,
+        bedtimeBefore: +document.getElementById("nBedBefore").value || 60
+      };
+      save(); syncAlarms(); b.textContent = "저장했어요"; setTimeout(render, 900); return;
     case "reest":
       S.tasks.forEach(function(x){ if(x.minutesSource !== "record" && x.minutesSource !== "user"){ x.minutesSource = "pending"; x.aiError = false; estimate(x); } });
       break;
-    case "reset": if(confirm("모든 할 일과 기록을 지울까요?")){ S = defaultState(); } else return; break;
+    case "reset": if(confirm("모든 할 일과 기록을 지울까요?")){ S.tasks.forEach(function(x){ notifyCancel("snooze-" + x.id); }); S = defaultState(); syncAlarms(); } else return; break;
   }
   save(); render();
 });
 window.addEventListener("hashchange", render);
 document.addEventListener("visibilitychange", function(){ if(!document.hidden) render(); });
+syncAlarms();
 render();
 })();
 </script>

@@ -1,8 +1,13 @@
 package com.neulgong.prioapp;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -15,6 +20,7 @@ import androidx.webkit.WebViewAssetLoader;
 public class MainActivity extends Activity {
 
     private static final String START_URL = "https://appassets.androidplatform.net/assets/index.html";
+    private static final String HOST = "appassets.androidplatform.net";
     private WebView webView;
 
     @Override
@@ -22,6 +28,12 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         getWindow().setStatusBarColor(0xFF121417);
         getWindow().setNavigationBarColor(0xFF16191D);
+        Alarms.ensureChannel(this);
+
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
+        }
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -35,6 +47,7 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
 
+        webView.addJavascriptInterface(new Bridge(), "AndroidBridge");
         webView.setWebChromeClient(new WebChromeClient()); // confirm() 대화상자 표시
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -45,7 +58,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri u = request.getUrl();
-                return !"appassets.androidplatform.net".equals(u.getHost());
+                return !HOST.equals(u.getHost());
             }
         });
 
@@ -53,7 +66,21 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
-            webView.loadUrl(START_URL);
+            webView.loadUrl(START_URL + hashFrom(getIntent()));
+        }
+    }
+
+    private static String hashFrom(Intent intent) {
+        String h = intent == null ? null : intent.getStringExtra(Alarms.EXTRA_HASH);
+        return (h != null && h.matches("#[a-z]+(/[A-Za-z0-9]+)?")) ? h : "";
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String h = hashFrom(intent);
+        if (!h.isEmpty() && webView != null) {
+            webView.evaluateJavascript("location.hash='" + h + "'", null);
         }
     }
 
@@ -70,6 +97,21 @@ public class MainActivity extends Activity {
             webView.goBack();
         } else {
             super.onBackPressed();
+        }
+    }
+
+    /** 웹 화면(index.html)에서 window.AndroidBridge 로 부르는 함수들 */
+    private class Bridge {
+        @JavascriptInterface
+        public void schedule(String id, String atMs, String title, String body, boolean daily, String hash) {
+            long at;
+            try { at = Long.parseLong(atMs); } catch (NumberFormatException e) { return; }
+            Alarms.schedule(getApplicationContext(), id, at, title, body, daily, hash);
+        }
+
+        @JavascriptInterface
+        public void cancel(String id) {
+            Alarms.cancel(getApplicationContext(), id);
         }
     }
 }
